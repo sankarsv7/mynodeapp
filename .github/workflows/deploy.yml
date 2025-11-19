@@ -1,0 +1,53 @@
+name: CI/CD to EKS
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: mynodeapp
+  CLUSTER_NAME: my-node-api-cluster
+  DEPLOYMENT_NAME: my-api-deployment
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker Image
+        run: |
+          docker build -t $ECR_REPO .
+          docker tag $ECR_REPO:latest ${{ steps.login-ecr.outputs.registry }}/${ECR_REPO}:latest
+
+      - name: Push to ECR
+        run: |
+          docker push ${{ steps.login-ecr.outputs.registry }}/${ECR_REPO}:latest
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Update Kubeconfig
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+
+      - name: Deploy to EKS (Rolling Update)
+        run: |
+          kubectl set image deployment/$DEPLOYMENT_NAME my-api=${{ steps.login-ecr.outputs.registry }}/${ECR_REPO}:latest
+          kubectl rollout status deployment/$DEPLOYMENT_NAME
