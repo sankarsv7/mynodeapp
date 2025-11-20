@@ -38,7 +38,7 @@ router.get('/', async (req, res) => {
 });
 */
 
-// READ one tutorial detail
+// READ one tutorial details
 router.get('/:id', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM Tutorial WHERE id = ?', [
