@@ -16,7 +16,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// READ all tutorial
+// READ all tutorial details
 router.get("/", (req, res) => {
      try {
     db.query("SELECT * FROM Tutorial", (err, rows) => {
