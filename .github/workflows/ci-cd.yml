@@ -26,7 +26,7 @@ jobs:
 
       - name: Build, Tag, Push image to ECR
         run: |
-          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/my-api:latest"
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/mynodeapp:latest"
           docker build -t my-api .
           docker tag my-api:latest $IMAGE_URI
           docker push $IMAGE_URI
