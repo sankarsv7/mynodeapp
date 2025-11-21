@@ -35,7 +35,7 @@ jobs:
           fi
 
           # Replace the image line (simple in-place replacement). Adjust regexp if your YAML uses indentation/annotations.
-          sed -i "s|image: .*|image: $IMAGE_URI|g" k8s/deployment.yaml
+          sed -i "s|image: .*mynodeapp.*|image: $IMAGE_URI|g" k8s/deployment.yaml
 
           # Configure git user for commit
           git config user.name "github-actions"
