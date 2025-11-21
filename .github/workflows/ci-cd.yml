@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write   # REQUIRED so GitHub Actions can push commits
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,6 +15,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # we will provide our own token later
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -25,17 +30,31 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v1
 
       - name: Build, Tag, Push image to ECR
+        id: build-image
         run: |
-          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/mynodeapp:latest"
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/mynodeapp:${{ github.sha }}"
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
           docker build -t my-api .
           docker tag my-api:latest $IMAGE_URI
           docker push $IMAGE_URI
 
       - name: Update Kubernetes manifests with new image
+        env:
+          IMAGE_URI: ${{ env.IMAGE_URI }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "Updating deployment image to: $IMAGE_URI"
+
+          # Update image in deployment.yaml
           sed -i "s|image: .*|image: $IMAGE_URI|g" k8s/deployment.yaml
+
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}
-          git commit -am "Update image to $IMAGE_URI" || echo "No changes"
+
+          # authenticate git push via token
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+
+          git add k8s/deployment.yaml
+          git commit -m "ci: update image to $IMAGE_URI" || echo "No changes"
           git push
