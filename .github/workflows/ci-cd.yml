@@ -1,24 +1,56 @@
-- name: Update Kubernetes manifests with new image
-  env:
-    IMAGE_URI: ${{ env.IMAGE_URI }}
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  run: |
-    echo "Updating deployment image to: $IMAGE_URI"
+name: CI/CD — update k8s image
 
-    # Update image in deployment.yaml
-    sed -i "s|image: .*|image: $IMAGE_URI|g" k8s/deployment.yaml
+# Allow manual runs with an image URI input. Adjust triggers as needed.
+on:
+  workflow_dispatch:
+    inputs:
+      image_uri:
+        description: 'Full image URI (e.g. 123.dkr.ecr.us-east-1.amazonaws.com/mynodeapp:tag)'
+        required: true
 
-    git config user.name "github-actions"
-    git config user.email "actions@github.com"
+permissions:
+  contents: write
 
-    # authenticate git push
-    git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+jobs:
+  update-manifests:
+    name: Update deployment manifest image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    # fetch latest to avoid "fetch first" error
-    git fetch origin main
-    git pull origin main --rebase || true
+      - name: Update Kubernetes manifests with new image
+        env:
+          IMAGE_URI: ${{ github.event.inputs.image_uri }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Updating deployment image to: $IMAGE_URI"
 
-    git add k8s/deployment.yaml
-    git commit -m "ci: update image to $IMAGE_URI" || echo "No changes"
+          # Ensure k8s file exists
+          if [ ! -f k8s/deployment.yaml ]; then
+            echo "k8s/deployment.yaml not found"
+            exit 1
+          fi
 
-    git push origin HEAD:main
+          # Replace the image line (simple in-place replacement). Adjust regexp if your YAML uses indentation/annotations.
+          sed -i "s|image: .*|image: $IMAGE_URI|g" k8s/deployment.yaml
+
+          # Configure git user for commit
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          # Authenticate push using token
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+
+          # Sync with main to avoid push errors
+          git fetch origin main
+          git pull origin main --rebase || true
+
+          git add k8s/deployment.yaml
+          git commit -m "ci: update image to $IMAGE_URI" || echo "No changes to commit"
+
+          # Push the change back to main
+          git push origin HEAD:main
+
